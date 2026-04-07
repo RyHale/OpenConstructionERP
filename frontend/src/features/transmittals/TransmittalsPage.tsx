@@ -586,6 +586,10 @@ export function TransmittalsPage() {
 
   const handleCreateSubmit = useCallback(
     (formData: TransmittalFormData) => {
+      if (!projectId) {
+        addToast({ type: 'error', title: t('common.error', { defaultValue: 'Error' }), message: t('common.select_project_first', { defaultValue: 'Please select a project first' }) });
+        return;
+      }
       createMut.mutate({
         project_id: projectId,
         subject: formData.subject,
@@ -604,7 +608,7 @@ export function TransmittalsPage() {
           .map((title) => ({ document_title: title })),
       });
     },
-    [createMut, projectId],
+    [createMut, projectId, addToast, t],
   );
 
   const handleIssue = useCallback(
@@ -661,6 +665,7 @@ export function TransmittalsPage() {
             size="sm"
             onClick={() => setShowCreateModal(true)}
             disabled={!projectId}
+            title={!projectId ? t('common.select_project_first', { defaultValue: 'Please select a project first' }) : undefined}
             className="shrink-0 whitespace-nowrap"
           >
             <Plus size={14} className="mr-1 shrink-0" />
@@ -670,6 +675,13 @@ export function TransmittalsPage() {
           </Button>
         </div>
       </div>
+
+      {/* No-project warning */}
+      {!projectId && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          {t('common.select_project_first', { defaultValue: 'Please select a project to continue.' })}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
