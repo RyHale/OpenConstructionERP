@@ -286,10 +286,9 @@ export function ModulesPage() {
   });
 
   /* Also fetch loaded system modules for the installed-modules section */
-  const { data: systemModules } = useQuery({
-    queryKey: ['modules'],
-    queryFn: () =>
-      apiGet<{ modules: SystemModule[] }>('/system/modules').then((d) => d.modules),
+  const { data: systemModules, refetch: refetchSystemModules } = useQuery({
+    queryKey: ['system-modules'],
+    queryFn: () => apiGet<SystemModule[]>('/v1/modules'),
   });
 
   const { data: rules } = useQuery({
@@ -732,47 +731,11 @@ export function ModulesPage() {
 
       {/* ── Installed system modules section ──────────────────────── */}
       {systemModules && systemModules.length > 0 && (
-        <div className="mt-12 animate-card-in" style={{ animationDelay: '300ms' }}>
-          <h2 className="text-lg font-semibold text-content-primary mb-1">
-            {t('marketplace.installed_modules', {
-              defaultValue: 'Installed Core Modules',
-            })}
-          </h2>
-          <p className="text-sm text-content-secondary mb-4">
-            {systemModules.length}{' '}
-            {t('marketplace.modules_loaded', { defaultValue: 'modules loaded' })}
-            {rules?.rules ? `, ${rules.rules.length} ${t('marketplace.validation_rules_active', { defaultValue: 'validation rules active' })}` : ''}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {systemModules.map((mod, i) => (
-              <Card
-                key={mod.name}
-                className="animate-card-in"
-                style={{ animationDelay: `${350 + i * 40}ms` }}
-                padding="sm"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-semantic-success-bg text-[#15803d] dark:text-emerald-400">
-                    <ShieldCheck size={15} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-content-primary truncate">
-                        {mod.display_name}
-                      </span>
-                      <Badge variant="success" size="sm" dot>
-                        {t('marketplace.active', { defaultValue: 'Active' })}
-                      </Badge>
-                    </div>
-                    <div className="text-2xs text-content-tertiary font-mono">
-                      v{mod.version}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
+        <InstalledModulesSection
+          modules={systemModules}
+          rulesCount={rules?.rules?.length}
+          onModuleToggle={() => void refetchSystemModules()}
+        />
       )}
 
       {/* ── Validation Rules ─────────────────────────────────────── */}
@@ -1041,6 +1004,167 @@ function UnifiedModulesSection({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ── Installed Modules Section (backend-driven enable/disable) ─────────── */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+interface InstalledModulesSectionProps {
+  modules: SystemModule[];
+  rulesCount?: number;
+  onModuleToggle: () => void;
+}
+
+function InstalledModulesSection({ modules, rulesCount, onModuleToggle }: InstalledModulesSectionProps) {
+  const { t } = useTranslation();
+  const addToast = useToastStore((s) => s.addToast);
+  const [togglingModule, setTogglingModule] = useState<string | null>(null);
+
+  const enabledCount = modules.filter((m) => m.enabled).length;
+
+  async function handleBackendToggle(mod: SystemModule): Promise<void> {
+    if (mod.is_core) {
+      addToast({
+        type: 'warning',
+        title: t('modules.cannot_disable', { defaultValue: 'Cannot disable' }),
+        message: t('modules.core_module_locked', {
+          defaultValue: '{{name}} is a core module and cannot be disabled.',
+          name: mod.display_name,
+        }),
+      });
+      return;
+    }
+
+    setTogglingModule(mod.name);
+    const action = mod.enabled ? 'disable' : 'enable';
+    try {
+      await apiPost<{ name: string; status: string }>(`/v1/modules/${mod.name}/${action}`);
+      addToast({
+        type: 'success',
+        title: action === 'enable'
+          ? t('modules.enabled', { defaultValue: '{{name}} enabled', name: mod.display_name })
+          : t('modules.disabled', { defaultValue: '{{name}} disabled', name: mod.display_name }),
+      });
+      onModuleToggle();
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: t('modules.toggle_failed', { defaultValue: 'Toggle failed' }),
+        message: err instanceof Error ? err.message : t('common.unknown_error', { defaultValue: 'Unknown error' }),
+      });
+    } finally {
+      setTogglingModule(null);
+    }
+  }
+
+  return (
+    <div className="mt-12 animate-card-in" style={{ animationDelay: '300ms' }}>
+      <h2 className="text-lg font-semibold text-content-primary mb-1">
+        {t('marketplace.installed_modules', {
+          defaultValue: 'Installed Modules',
+        })}
+      </h2>
+      <p className="text-sm text-content-secondary mb-4">
+        {enabledCount}/{modules.length}{' '}
+        {t('marketplace.modules_enabled', { defaultValue: 'modules enabled' })}
+        {rulesCount ? `, ${rulesCount} ${t('marketplace.validation_rules_active', { defaultValue: 'validation rules active' })}` : ''}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {modules.map((mod, i) => (
+          <Card
+            key={mod.name}
+            className="animate-card-in"
+            style={{ animationDelay: `${350 + i * 40}ms` }}
+            padding="sm"
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`
+                  flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors
+                  ${mod.enabled
+                    ? 'bg-semantic-success-bg text-[#15803d] dark:text-emerald-400'
+                    : 'bg-surface-tertiary text-content-quaternary'
+                  }
+                `}
+              >
+                {mod.is_core ? <ShieldCheck size={15} /> : <Package size={15} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-content-primary truncate">
+                    {mod.display_name}
+                  </span>
+                  {mod.is_core ? (
+                    <Badge variant="blue" size="sm">
+                      {t('modules.core', { defaultValue: 'Core' })}
+                    </Badge>
+                  ) : mod.enabled ? (
+                    <Badge variant="success" size="sm" dot>
+                      {t('marketplace.active', { defaultValue: 'Active' })}
+                    </Badge>
+                  ) : (
+                    <Badge variant="neutral" size="sm">
+                      {t('modules.disabled_label', { defaultValue: 'Disabled' })}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-2xs text-content-tertiary">
+                  <span className="font-mono">v{mod.version}</span>
+                  {mod.category && mod.category !== 'core' && (
+                    <>
+                      <span className="text-border">|</span>
+                      <span>{mod.category}</span>
+                    </>
+                  )}
+                </div>
+                {mod.description && (
+                  <p className="text-2xs text-content-quaternary mt-0.5 line-clamp-1">
+                    {mod.description}
+                  </p>
+                )}
+                {mod.depends && mod.depends.length > 0 && (
+                  <span className="text-2xs text-content-quaternary">
+                    {t('modules.depends_on', { defaultValue: 'Requires: {{deps}}', deps: mod.depends.join(', ') })}
+                  </span>
+                )}
+              </div>
+
+              {/* Enable/Disable toggle for non-core modules */}
+              {!mod.is_core && (
+                <button
+                  onClick={() => void handleBackendToggle(mod)}
+                  disabled={togglingModule === mod.name}
+                  role="switch"
+                  aria-checked={mod.enabled}
+                  aria-label={`${mod.enabled ? 'Disable' : 'Enable'} ${mod.display_name}`}
+                  className="shrink-0"
+                >
+                  {togglingModule === mod.name ? (
+                    <Loader2 size={16} className="animate-spin text-content-tertiary" />
+                  ) : (
+                    <div
+                      className={`
+                        relative h-5 w-9 rounded-full transition-colors duration-200
+                        ${mod.enabled ? 'bg-oe-blue' : 'bg-content-quaternary/40'}
+                      `}
+                    >
+                      <div
+                        className={`
+                          absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200
+                          ${mod.enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}
+                        `}
+                      />
+                    </div>
+                  )}
+                </button>
+              )}
+            </div>
+          </Card>
+        ))}
       </div>
     </div>
   );
@@ -1359,10 +1483,16 @@ interface SystemModule {
   name: string;
   version: string;
   display_name: string;
+  display_name_i18n?: Record<string, string>;
+  description?: string;
+  author?: string;
   category: string;
   depends: string[];
+  optional_depends?: string[];
   has_router: boolean;
   loaded: boolean;
+  enabled: boolean;
+  is_core: boolean;
 }
 
 interface ValidationRulesResponse {

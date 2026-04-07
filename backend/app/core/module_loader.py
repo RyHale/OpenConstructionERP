@@ -37,6 +37,8 @@ class ModuleManifest:
     author: str = ""
     category: str = "core"  # "core", "integration", "regional", "community"
     depends: list[str] = field(default_factory=list)
+    optional_depends: list[str] = field(default_factory=list)
+    display_name_i18n: dict[str, str] = field(default_factory=dict)  # {"de": "...", "ru": "..."}
     auto_install: bool = False
     enabled: bool = True
 
@@ -58,6 +60,7 @@ class ModuleLoader:
         self._manifests: dict[str, ModuleManifest] = {}
         self._modules: dict[str, LoadedModule] = {}
         self._load_order: list[str] = []
+        self._disabled: set[str] = set()  # modules disabled via state persistence
 
     @property
     def loaded_modules(self) -> dict[str, LoadedModule]:
@@ -133,8 +136,24 @@ class ModuleLoader:
         return resolved
 
     async def load_all(self, app: FastAPI) -> None:
-        """Discover, resolve, and load all modules."""
+        """Discover, resolve, and load all modules.
+
+        Reads persisted module states to skip disabled non-core modules.
+        """
+        from app.core.module_state import load_module_states
+
         self.discover()
+
+        # Apply persisted states: mark non-core modules as disabled
+        states = load_module_states()
+        for name, state in states.items():
+            if name in self._manifests and not state.enabled:
+                manifest = self._manifests[name]
+                if manifest.category != "core":
+                    manifest.enabled = False
+                    self._disabled.add(name)
+                    logger.info("Module %s is disabled by persisted state", name)
+
         order = self.resolve_order()
 
         logger.info("Loading %d modules in order: %s", len(order), order)
@@ -215,19 +234,200 @@ class ModuleLoader:
         return self._modules.get(name)
 
     def list_modules(self) -> list[dict[str, Any]]:
-        """List all loaded modules with status."""
-        return [
-            {
-                "name": m.manifest.name,
-                "version": m.manifest.version,
-                "display_name": m.manifest.display_name,
-                "category": m.manifest.category,
-                "depends": m.manifest.depends,
-                "has_router": m.router is not None,
-                "loaded": True,
-            }
-            for m in self._modules.values()
+        """List all discovered modules with enabled/disabled/loaded status."""
+        result: list[dict[str, Any]] = []
+
+        for name, manifest in self._manifests.items():
+            loaded = name in self._modules
+            loaded_mod = self._modules.get(name)
+            result.append({
+                "name": manifest.name,
+                "version": manifest.version,
+                "display_name": manifest.display_name,
+                "display_name_i18n": manifest.display_name_i18n,
+                "description": manifest.description,
+                "author": manifest.author,
+                "category": manifest.category,
+                "depends": manifest.depends,
+                "optional_depends": manifest.optional_depends,
+                "has_router": loaded_mod.router is not None if loaded_mod else False,
+                "loaded": loaded,
+                "enabled": name not in self._disabled,
+                "is_core": manifest.category == "core",
+            })
+
+        return result
+
+    # ── Runtime enable / disable ─────────────────────────────────────────
+
+    def is_enabled(self, module_name: str) -> bool:
+        """Check if module is enabled (considers state persistence)."""
+        if module_name not in self._manifests:
+            return False
+        return module_name not in self._disabled
+
+    async def enable_module(self, module_name: str, app: FastAPI) -> dict[str, Any]:
+        """Enable a disabled module at runtime (loads router, models).
+
+        Also loads any unloaded dependencies required by this module.
+
+        Returns:
+            dict with module info after enabling.
+
+        Raises:
+            ValueError: If module_name is unknown.
+        """
+        from app.core.module_state import set_module_enabled as persist_enable
+
+        if module_name not in self._manifests:
+            raise ValueError(f"Unknown module: {module_name}")
+
+        manifest = self._manifests[module_name]
+
+        # Already enabled and loaded
+        if module_name in self._modules and module_name not in self._disabled:
+            return {"name": module_name, "status": "already_enabled"}
+
+        # Ensure required dependencies are loaded first
+        for dep in manifest.depends:
+            if dep not in self._modules:
+                if dep in self._manifests:
+                    await self.enable_module(dep, app)
+                else:
+                    logger.warning("Missing dependency %s for %s", dep, module_name)
+
+        # Update state
+        manifest.enabled = True
+        self._disabled.discard(module_name)
+
+        # Load if not already loaded
+        if module_name not in self._modules:
+            await self._load_module(module_name, app)
+
+        # Persist
+        core_names = {n for n, m in self._manifests.items() if m.category == "core"}
+        persist_enable(module_name, True, core_modules=core_names)
+
+        return {
+            "name": module_name,
+            "status": "enabled",
+            "display_name": manifest.display_name,
+            "version": manifest.version,
+        }
+
+    async def disable_module(self, module_name: str, app: FastAPI) -> dict[str, Any]:
+        """Disable a module at runtime (removes router from app).
+
+        Core modules cannot be disabled.
+
+        Returns:
+            dict with module info after disabling.
+
+        Raises:
+            ValueError: If module is core or if other enabled modules depend on it.
+        """
+        from app.core.module_state import set_module_enabled as persist_enable
+
+        if module_name not in self._manifests:
+            raise ValueError(f"Unknown module: {module_name}")
+
+        manifest = self._manifests[module_name]
+
+        if manifest.category == "core":
+            raise ValueError(
+                f"Module '{module_name}' is a core module and cannot be disabled."
+            )
+
+        # Check that no other enabled module depends on this one
+        tree = self.get_dependency_tree(module_name)
+        dependents = tree.get("dependents", [])
+        enabled_dependents = [
+            d for d in dependents if d not in self._disabled
         ]
+        if enabled_dependents:
+            raise ValueError(
+                f"Cannot disable '{module_name}': required by enabled modules: "
+                f"{', '.join(enabled_dependents)}"
+            )
+
+        # Remove router from the FastAPI app
+        loaded = self._modules.get(module_name)
+        if loaded and loaded.router:
+            dir_name = module_name.removeprefix("oe_")
+            prefix = f"/api/v1/{dir_name}"
+            app.routes[:] = [
+                r for r in app.routes
+                if not (hasattr(r, "path") and getattr(r, "path", "").startswith(prefix))
+            ]
+            logger.info("Removed routes for %s (prefix %s)", module_name, prefix)
+
+        # Mark as disabled
+        manifest.enabled = False
+        self._disabled.add(module_name)
+
+        # Persist
+        core_names = {n for n, m in self._manifests.items() if m.category == "core"}
+        persist_enable(module_name, False, core_modules=core_names)
+
+        return {
+            "name": module_name,
+            "status": "disabled",
+            "display_name": manifest.display_name,
+        }
+
+    def get_module_info(self, name: str) -> dict[str, Any]:
+        """Detailed module info including dependencies, state, routes."""
+        if name not in self._manifests:
+            raise ValueError(f"Unknown module: {name}")
+
+        manifest = self._manifests[name]
+        loaded = self._modules.get(name)
+        dir_name = name.removeprefix("oe_")
+
+        return {
+            "name": manifest.name,
+            "version": manifest.version,
+            "display_name": manifest.display_name,
+            "display_name_i18n": manifest.display_name_i18n,
+            "description": manifest.description,
+            "author": manifest.author,
+            "category": manifest.category,
+            "depends": manifest.depends,
+            "optional_depends": manifest.optional_depends,
+            "auto_install": manifest.auto_install,
+            "is_core": manifest.category == "core",
+            "enabled": name not in self._disabled,
+            "loaded": loaded is not None,
+            "has_router": loaded.router is not None if loaded else False,
+            "route_prefix": f"/api/v1/{dir_name}" if loaded and loaded.router else None,
+            "has_models": bool(loaded.models) if loaded else False,
+            "dependency_tree": self.get_dependency_tree(name),
+        }
+
+    def get_dependency_tree(self, name: str) -> dict[str, Any]:
+        """Returns which modules depend on this module (for disable warnings)."""
+        if name not in self._manifests:
+            raise ValueError(f"Unknown module: {name}")
+
+        # Find all modules that list `name` in their depends
+        dependents: list[str] = []
+        optional_dependents: list[str] = []
+        for mod_name, manifest in self._manifests.items():
+            if mod_name == name:
+                continue
+            if name in manifest.depends:
+                dependents.append(mod_name)
+            if name in manifest.optional_depends:
+                optional_dependents.append(mod_name)
+
+        return {
+            "module": name,
+            "depends_on": self._manifests[name].depends,
+            "optional_depends_on": self._manifests[name].optional_depends,
+            "dependents": dependents,
+            "optional_dependents": optional_dependents,
+            "enabled_dependents": [d for d in dependents if d not in self._disabled],
+        }
 
 
 # Global singleton

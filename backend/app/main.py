@@ -259,6 +259,11 @@ def create_app() -> FastAPI:
 
     app.include_router(i18n_router, prefix="/api/v1")
 
+    # Module management API (list / enable / disable)
+    from app.core.module_router import router as module_mgmt_router
+
+    app.include_router(module_mgmt_router)
+
     @app.get("/api/health", tags=["System"])
     async def health_check() -> dict[str, Any]:
         return {
