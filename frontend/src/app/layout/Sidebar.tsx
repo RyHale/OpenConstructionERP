@@ -381,7 +381,7 @@ function NavGroupSection({
         onClick={onToggle}
         aria-expanded={!isCollapsed}
         aria-label={isCollapsed ? t('common.expand_section', { defaultValue: 'Expand {{label}}', label }) : t('common.collapse_section', { defaultValue: 'Collapse {{label}}', label })}
-        className="mt-2.5 mb-0.5 flex w-full items-center justify-between px-3 group cursor-pointer"
+        className="mt-2 mb-0.5 flex w-full items-center justify-between px-2.5 group cursor-pointer"
       >
         <span className="text-2xs font-medium uppercase tracking-wider text-content-tertiary group-hover:text-content-secondary transition-colors">
           {label}
@@ -429,7 +429,7 @@ function SidebarItem({ item, label, onClick, badge: numericBadge }: { item: NavI
         className={({ isActive: routerIsActive }) => {
           const isActive = computeActive(routerIsActive);
           return clsx(
-            'flex items-center gap-2.5 rounded-lg px-3 py-1.5',
+            'flex items-center gap-2 rounded-md px-2.5 py-[5px]',
             'text-[13px] font-medium transition-all duration-fast ease-oe',
             item.highlight && !isActive
               ? 'bg-gradient-to-r from-[#7c3aed]/10 to-[#0ea5e9]/10 text-[#6d28d9] hover:from-[#7c3aed]/15 hover:to-[#0ea5e9]/15'
