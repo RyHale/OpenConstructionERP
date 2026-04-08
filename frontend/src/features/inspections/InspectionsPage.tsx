@@ -16,7 +16,8 @@ import {
   Download,
   Loader2,
 } from 'lucide-react';
-import { Button, Card, Badge, EmptyState, Breadcrumb } from '@/shared/ui';
+import { Button, Card, Badge, EmptyState, Breadcrumb, ConfirmDialog, SkeletonTable } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { DateDisplay } from '@/shared/ui/DateDisplay';
 import { apiGet, apiPost, triggerDownload } from '@/shared/lib/api';
 import { useToastStore } from '@/stores/useToastStore';
@@ -626,11 +627,19 @@ export function InspectionsPage() {
       }),
   });
 
+  const { confirm, ...confirmProps } = useConfirm();
+
   const handleComplete = useCallback(
-    (id: string) => {
-      completeMut.mutate(id);
+    async (id: string) => {
+      const ok = await confirm({
+        title: t('inspections.confirm_complete_title', { defaultValue: 'Complete inspection?' }),
+        message: t('inspections.confirm_complete_msg', { defaultValue: 'This inspection will be marked as completed.' }),
+        confirmLabel: t('inspections.mark_complete', { defaultValue: 'Complete' }),
+        variant: 'warning',
+      });
+      if (ok) completeMut.mutate(id);
     },
-    [completeMut],
+    [completeMut, confirm, t],
   );
 
   const createDefectMut = useMutation({
@@ -817,19 +826,7 @@ export function InspectionsPage() {
       {/* Table */}
       <div>
         {isLoading ? (
-          <Card padding="none">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-4 py-3 border-b border-border-light"
-              >
-                <div className="h-4 w-16 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-4 flex-1 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-5 w-20 animate-pulse rounded-full bg-surface-tertiary" />
-                <div className="h-4 w-20 animate-pulse rounded bg-surface-tertiary hidden md:block" />
-              </div>
-            ))}
-          </Card>
+          <SkeletonTable rows={5} columns={6} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<ClipboardCheck size={24} strokeWidth={1.5} />}
@@ -866,9 +863,9 @@ export function InspectionsPage() {
                 count: filtered.length,
               })}
             </p>
-            <Card padding="none">
+            <Card padding="none" className="overflow-x-auto">
               {/* Table header */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide">
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide min-w-[640px]">
                 <span className="w-5" />
                 <span className="w-20">#</span>
                 <span className="flex-1">
@@ -913,6 +910,9 @@ export function InspectionsPage() {
           isPending={createMut.isPending}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

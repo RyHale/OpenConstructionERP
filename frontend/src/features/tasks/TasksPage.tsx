@@ -16,7 +16,8 @@ import {
   Loader2,
   FileDown,
 } from 'lucide-react';
-import { Button, Card, Badge, EmptyState, Breadcrumb } from '@/shared/ui';
+import { Button, Card, Badge, EmptyState, Breadcrumb, ConfirmDialog, SkeletonGrid } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { apiGet } from '@/shared/lib/api';
 import { useToastStore } from '@/stores/useToastStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
@@ -565,11 +566,19 @@ export function TasksPage() {
     [createMut, projectId, addToast, t],
   );
 
+  const { confirm, ...confirmProps } = useConfirm();
+
   const handleComplete = useCallback(
-    (id: string) => {
-      completeMut.mutate(id);
+    async (id: string) => {
+      const ok = await confirm({
+        title: t('tasks.confirm_complete_title', { defaultValue: 'Complete task?' }),
+        message: t('tasks.confirm_complete_msg', { defaultValue: 'This task will be marked as completed.' }),
+        confirmLabel: t('tasks.mark_complete', { defaultValue: 'Complete' }),
+        variant: 'warning',
+      });
+      if (ok) completeMut.mutate(id);
     },
-    [completeMut],
+    [completeMut, confirm, t],
   );
 
   const handleImportFile = async () => {
@@ -785,18 +794,7 @@ export function TasksPage() {
       {/* Board / Columns */}
       <div>
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {STATUSES.map((s) => (
-              <div key={s}>
-                <div className="h-10 animate-pulse rounded-lg bg-surface-tertiary mb-3" />
-                <div className="space-y-2">
-                  {Array.from({ length: 2 }).map((_, i) => (
-                    <div key={i} className="h-24 animate-pulse rounded-lg bg-surface-tertiary" />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <SkeletonGrid items={6} gridCols="md:grid-cols-3" />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<ClipboardList size={24} strokeWidth={1.5} />}
@@ -993,6 +991,9 @@ export function TasksPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

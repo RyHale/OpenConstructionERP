@@ -11,7 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { Button, Card, Badge, EmptyState, Breadcrumb, DateDisplay } from '@/shared/ui';
+import { Button, Card, Badge, EmptyState, Breadcrumb, DateDisplay, SkeletonTable, ConfirmDialog } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { apiGet } from '@/shared/lib/api';
 import { useToastStore } from '@/stores/useToastStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
@@ -647,11 +648,19 @@ export function SubmittalsPage() {
     [createMut, projectId, addToast, t],
   );
 
+  const { confirm, ...confirmProps } = useConfirm();
+
   const handleSubmit = useCallback(
-    (id: string) => {
-      submitMut.mutate(id);
+    async (id: string) => {
+      const ok = await confirm({
+        title: t('submittals.confirm_submit_title', { defaultValue: 'Submit for review?' }),
+        message: t('submittals.confirm_submit_msg', { defaultValue: 'This submittal will be sent for review and cannot be edited until the review is complete.' }),
+        confirmLabel: t('submittals.action_submit', { defaultValue: 'Submit' }),
+        variant: 'warning',
+      });
+      if (ok) submitMut.mutate(id);
     },
-    [submitMut],
+    [submitMut, confirm, t],
   );
 
   const handleReview = useCallback((s: Submittal) => {
@@ -811,19 +820,7 @@ export function SubmittalsPage() {
       {/* Table */}
       <div>
         {isLoading ? (
-          <Card padding="none">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-4 py-3 border-b border-border-light"
-              >
-                <div className="h-4 w-16 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-4 flex-1 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-5 w-20 animate-pulse rounded-full bg-surface-tertiary" />
-                <div className="h-4 w-20 animate-pulse rounded bg-surface-tertiary hidden md:block" />
-              </div>
-            ))}
-          </Card>
+          <SkeletonTable rows={5} columns={6} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<FileCheck size={24} strokeWidth={1.5} />}
@@ -858,9 +855,9 @@ export function SubmittalsPage() {
                 count: filtered.length,
               })}
             </p>
-            <Card padding="none">
+            <Card padding="none" className="overflow-x-auto">
               {/* Table header */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide">
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide min-w-[640px]">
                 <span className="w-5" />
                 <span className="w-20">#</span>
                 <span className="flex-1">
@@ -918,6 +915,9 @@ export function SubmittalsPage() {
           isPending={approveMut.isPending}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

@@ -12,7 +12,8 @@ import {
   ChevronRight,
   ArrowRight,
 } from 'lucide-react';
-import { Button, Card, Badge, EmptyState, Breadcrumb, DateDisplay } from '@/shared/ui';
+import { Button, Card, Badge, EmptyState, Breadcrumb, DateDisplay, ConfirmDialog, SkeletonTable } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { apiGet } from '@/shared/lib/api';
 import { useToastStore } from '@/stores/useToastStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
@@ -561,16 +562,26 @@ export function CDEPage() {
     [createMut, projectId, addToast, t],
   );
 
+  const { confirm, ...confirmProps } = useConfirm();
+
   const handlePromote = useCallback(
-    (container: CDEContainer) => {
+    async (container: CDEContainer) => {
       const currentState = getContainerState(container);
       const nextIdx = STATE_ORDER.indexOf(currentState) + 1;
       const nextState = STATE_ORDER[nextIdx];
-      if (nextState) {
-        transitionMut.mutate({ id: container.id, targetState: nextState });
-      }
+      if (!nextState) return;
+      const ok = await confirm({
+        title: t('cde.confirm_promote_title', { defaultValue: 'Promote container?' }),
+        message: t('cde.confirm_promote_msg', {
+          defaultValue: 'This will move the container to the "{{state}}" state.',
+          state: nextState,
+        }),
+        confirmLabel: t('cde.action_promote', { defaultValue: 'Promote' }),
+        variant: 'warning',
+      });
+      if (ok) transitionMut.mutate({ id: container.id, targetState: nextState });
     },
-    [transitionMut],
+    [transitionMut, confirm, t],
   );
 
   return (
@@ -692,19 +703,7 @@ export function CDEPage() {
       {/* Table */}
       <div>
         {!projectId ? null : isLoading ? (
-          <Card padding="none">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-4 py-3 border-b border-border-light"
-              >
-                <div className="h-4 w-28 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-4 flex-1 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-5 w-20 animate-pulse rounded-full bg-surface-tertiary" />
-                <div className="h-5 w-16 animate-pulse rounded-full bg-surface-tertiary" />
-              </div>
-            ))}
-          </Card>
+          <SkeletonTable rows={5} columns={5} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Database size={24} strokeWidth={1.5} />}
@@ -740,9 +739,9 @@ export function CDEPage() {
                 count: filtered.length,
               })}
             </p>
-            <Card padding="none">
+            <Card padding="none" className="overflow-x-auto">
               {/* Table header */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide">
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide min-w-[640px]">
                 <span className="w-5" />
                 <span className="w-36">
                   {t('cde.col_code', { defaultValue: 'Code' })}
@@ -788,6 +787,9 @@ export function CDEPage() {
           isPending={createMut.isPending}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

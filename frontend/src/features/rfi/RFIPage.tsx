@@ -16,7 +16,8 @@ import {
   Download,
   Loader2,
 } from 'lucide-react';
-import { Button, Card, Badge, EmptyState, Breadcrumb } from '@/shared/ui';
+import { Button, Card, Badge, EmptyState, Breadcrumb, ConfirmDialog, SkeletonTable } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { apiGet, apiPost, triggerDownload } from '@/shared/lib/api';
 import { useToastStore } from '@/stores/useToastStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
@@ -718,11 +719,19 @@ export function RFIPage() {
     [respondMut, respondingRfi],
   );
 
+  const { confirm, ...confirmProps } = useConfirm();
+
   const handleClose = useCallback(
-    (id: string) => {
-      closeMut.mutate(id);
+    async (id: string) => {
+      const ok = await confirm({
+        title: t('rfi.confirm_close_title', { defaultValue: 'Close RFI?' }),
+        message: t('rfi.confirm_close_msg', { defaultValue: 'This RFI will be closed and no further responses can be added.' }),
+        confirmLabel: t('rfi.action_close', { defaultValue: 'Close RFI' }),
+        variant: 'warning',
+      });
+      if (ok) closeMut.mutate(id);
     },
-    [closeMut],
+    [closeMut, confirm, t],
   );
 
   const createVariationMut = useMutation({
@@ -913,16 +922,7 @@ export function RFIPage() {
       {/* Table */}
       <div>
         {isLoading ? (
-          <Card padding="none">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-border-light">
-                <div className="h-4 w-12 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-4 flex-1 animate-pulse rounded bg-surface-tertiary" />
-                <div className="h-5 w-16 animate-pulse rounded-full bg-surface-tertiary" />
-                <div className="h-4 w-20 animate-pulse rounded bg-surface-tertiary hidden md:block" />
-              </div>
-            ))}
-          </Card>
+          <SkeletonTable rows={5} columns={6} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<HelpCircle size={24} strokeWidth={1.5} />}
@@ -957,9 +957,9 @@ export function RFIPage() {
                 count: filtered.length,
               })}
             </p>
-            <Card padding="none">
+            <Card padding="none" className="overflow-x-auto">
               {/* Table header */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide">
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-secondary/50 text-xs font-medium text-content-tertiary uppercase tracking-wide min-w-[640px]">
                 <span className="w-5" /> {/* Chevron space */}
                 <span className="w-16">#</span>
                 <span className="flex-1">
@@ -1015,6 +1015,9 @@ export function RFIPage() {
           isPending={respondMut.isPending}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

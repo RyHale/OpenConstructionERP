@@ -9,33 +9,42 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from app.config import get_settings
+
+# Core models (not in modules/)
+from app.core import audit as _audit_core  # noqa: F401
 from app.database import Base
 from app.modules.ai import models as _ai  # noqa: F401
 from app.modules.assemblies import models as _asm  # noqa: F401
 from app.modules.bim_hub import models as _bim_hub  # noqa: F401
 from app.modules.boq import models as _boq  # noqa: F401
 from app.modules.catalog import models as _catalog  # noqa: F401
-from app.modules.collaboration import models as _collaboration  # noqa: F401
 from app.modules.cde import models as _cde  # noqa: F401
+from app.modules.changeorders import models as _changeorders  # noqa: F401
+from app.modules.collaboration import models as _collaboration  # noqa: F401
 from app.modules.contacts import models as _contacts  # noqa: F401
 from app.modules.correspondence import models as _correspondence  # noqa: F401
-from app.modules.changeorders import models as _changeorders  # noqa: F401
 from app.modules.costmodel import models as _cm  # noqa: F401
 from app.modules.costs import models as _costs  # noqa: F401
 from app.modules.documents import models as _documents  # noqa: F401
+
+# Enterprise / feature-pack modules
+from app.modules.enterprise_workflows import models as _enterprise_workflows  # noqa: F401
 from app.modules.fieldreports import models as _fieldreports  # noqa: F401
 from app.modules.finance import models as _finance  # noqa: F401
+from app.modules.full_evm import models as _full_evm  # noqa: F401
 from app.modules.i18n_foundation import models as _i18n  # noqa: F401
 from app.modules.inspections import models as _inspections  # noqa: F401
 from app.modules.markups import models as _markups  # noqa: F401
 from app.modules.meetings import models as _meetings  # noqa: F401
 from app.modules.ncr import models as _ncr  # noqa: F401
+from app.modules.notifications import models as _notifications  # noqa: F401
 from app.modules.procurement import models as _procurement  # noqa: F401
 from app.modules.projects import models as _projects  # noqa: F401
 from app.modules.punchlist import models as _punchlist  # noqa: F401
 from app.modules.reporting import models as _reporting  # noqa: F401
 from app.modules.requirements import models as _requirements  # noqa: F401
 from app.modules.rfi import models as _rfi  # noqa: F401
+from app.modules.rfq_bidding import models as _rfq_bidding  # noqa: F401
 from app.modules.risk import models as _risk  # noqa: F401
 from app.modules.safety import models as _safety  # noqa: F401
 from app.modules.schedule import models as _sched  # noqa: F401
@@ -45,22 +54,12 @@ from app.modules.tasks import models as _tasks  # noqa: F401
 from app.modules.teams import models as _teams  # noqa: F401
 from app.modules.tendering import models as _tender  # noqa: F401
 from app.modules.transmittals import models as _transmittals  # noqa: F401
-from app.modules.validation import models as _validation  # noqa: F401
-
-from app.modules.notifications import models as _notifications  # noqa: F401
-
-# Enterprise / feature-pack modules
-from app.modules.enterprise_workflows import models as _enterprise_workflows  # noqa: F401
-from app.modules.full_evm import models as _full_evm  # noqa: F401
-from app.modules.rfq_bidding import models as _rfq_bidding  # noqa: F401
 
 # Import all module models so they're registered with Base.metadata.
 # This is done automatically by the module loader at runtime,
 # but we need it here for autogenerate to work.
 from app.modules.users import models as _users  # noqa: F401
-
-# Core models (not in modules/)
-from app.core import audit as _audit_core  # noqa: F401
+from app.modules.validation import models as _validation  # noqa: F401
 
 config = context.config
 settings = get_settings()

@@ -24,7 +24,9 @@ import {
   EmptyState,
   Breadcrumb,
   SkeletonTable,
+  ConfirmDialog,
 } from '@/shared/ui';
+import { useConfirm } from '@/shared/hooks/useConfirm';
 import { MoneyDisplay } from '@/shared/ui/MoneyDisplay';
 import { DateDisplay } from '@/shared/ui/DateDisplay';
 import { apiGet, apiPost, apiPatch, triggerDownload } from '@/shared/lib/api';
@@ -760,6 +762,7 @@ function InvoicesTab({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const { confirm, ...confirmProps } = useConfirm();
   const [subTab, setSubTab] = useState<InvoiceSubTab>('payable');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -1023,7 +1026,15 @@ function InvoicesTab({ projectId }: { projectId: string }) {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => approveMutation.mutate(inv.id)}
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: t('finance.confirm_approve_title', { defaultValue: 'Approve invoice?' }),
+                                message: t('finance.confirm_approve_msg', { defaultValue: 'This invoice will be approved for payment.' }),
+                                confirmLabel: t('finance.approve', { defaultValue: 'Approve' }),
+                                variant: 'warning',
+                              });
+                              if (ok) approveMutation.mutate(inv.id);
+                            }}
                             loading={approveMutation.isPending}
                           >
                             {t('finance.approve', { defaultValue: 'Approve' })}
@@ -1033,7 +1044,15 @@ function InvoicesTab({ projectId }: { projectId: string }) {
                           <Button
                             variant="primary"
                             size="sm"
-                            onClick={() => markPaidMutation.mutate(inv.id)}
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: t('finance.confirm_pay_title', { defaultValue: 'Mark as paid?' }),
+                                message: t('finance.confirm_pay_msg', { defaultValue: 'This invoice will be recorded as paid.' }),
+                                confirmLabel: t('finance.mark_paid', { defaultValue: 'Mark Paid' }),
+                                variant: 'warning',
+                              });
+                              if (ok) markPaidMutation.mutate(inv.id);
+                            }}
                             loading={markPaidMutation.isPending}
                           >
                             {t('finance.mark_paid', { defaultValue: 'Mark Paid' })}
@@ -1177,6 +1196,9 @@ function InvoicesTab({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }
