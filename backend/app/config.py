@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production"] = "development"
     app_debug: bool = True
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    allowed_origins: str = "http://localhost:5173"
+    allowed_origins: str = "*"
 
     # ── Database ─────────────────────────────────────────────────────────
     # Default: SQLite (zero config, works out of the box)

@@ -39,6 +39,7 @@ COPY backend/ backend/
 
 # Create frontend dist directory for hatch force-include
 RUN mkdir -p /app/frontend/dist
+COPY --from=frontend-build /build/dist /app/frontend/dist/
 COPY --from=frontend-build /build/dist backend/app/_frontend_dist/
 
 # Install Python dependencies with server extras (asyncpg for PostgreSQL)

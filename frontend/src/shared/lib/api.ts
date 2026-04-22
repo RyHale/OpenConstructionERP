@@ -15,7 +15,22 @@ import { useToastStore } from '@/stores/useToastStore';
 import { cacheResponse, getCachedResponse, queueMutation } from './offlineStore';
 import { logApiError, logError } from './errorLogger';
 
-const BASE_URL = '/api';
+function normalizeBaseUrl(value: string | undefined): string {
+  const raw = value?.trim();
+  if (!raw) return '/api';
+  if (raw.startsWith('/')) return raw.replace(/\/$/, '');
+
+  const withProtocol = raw.startsWith('http://') || raw.startsWith('https://')
+    ? raw
+    : `https://${raw}`;
+
+  const withoutTrailingSlash = withProtocol.replace(/\/$/, '');
+  return withoutTrailingSlash.endsWith('/api')
+    ? withoutTrailingSlash
+    : `${withoutTrailingSlash}/api`;
+}
+
+const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL);
 
 /** Retrieve the stored JWT token from the auth store. */
 function getToken(): string | null {

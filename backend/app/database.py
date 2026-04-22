@@ -95,6 +95,8 @@ def create_engine_from_settings():
     """Create async engine from application settings."""
     settings = get_settings()
     url = settings.database_url
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     kwargs: dict = {
         "echo": settings.database_echo,

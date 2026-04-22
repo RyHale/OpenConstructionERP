@@ -1286,3 +1286,6 @@ def create_app() -> FastAPI:
             logger.warning("Frontend mount skipped: %s", exc)
 
     return app
+
+
+app = create_app()

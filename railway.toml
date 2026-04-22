@@ -1,0 +1,12 @@
+[build]
+dockerfilePath = "deploy/docker/Dockerfile.unified"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[variables]
+SERVE_FRONTEND = "true"
+VECTOR_BACKEND = "lancedb"
