@@ -5,10 +5,10 @@
 #
 # Usage:
 #   docker build -t openconstructionerp -f deploy/docker/Dockerfile.unified .
-#   docker run -d -p 8080:8080 -v oe_data:/data openconstructionerp
+#   docker run -d -p 8000:8000 -v oe_data:/data openconstructionerp
 #
 # With PostgreSQL (override DATABASE_URL):
-#   docker run -d -p 8080:8080 \
+#   docker run -d -p 8000:8000 \
 #     -e DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname \
 #     openconstructionerp
 
@@ -70,9 +70,9 @@ ENV PYTHONUNBUFFERED=1 \
     JWT_SECRET=change-me-in-production \
     ALLOWED_ORIGINS=*
 
-EXPOSE 8080
+EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f "http://localhost:${PORT:-8080}/api/health" || exit 1
+    CMD curl -f "http://localhost:${PORT:-8000}/api/health" || exit 1
 
-CMD ["sh", "-c", "python -m uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${PORT:-8080} --app-dir /app/backend"]
+CMD ["sh", "-c", "python -m uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${PORT:-8000} --app-dir /app/backend"]
