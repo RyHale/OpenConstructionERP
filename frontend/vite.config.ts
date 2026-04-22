@@ -8,6 +8,10 @@ import { readFileSync } from 'fs';
 // Read the version from package.json once at build time so the entire app
 // (sidebar, About page, error reports, update checker) stays in sync.
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+const railwayAllowedHosts = [
+  process.env.RAILWAY_PUBLIC_DOMAIN,
+  process.env.RAILWAY_STATIC_URL,
+].filter((host): host is string => Boolean(host));
 
 export default defineConfig({
   define: {
@@ -36,6 +40,9 @@ export default defineConfig({
         timeout: 300000,
       },
     },
+  },
+  preview: {
+    allowedHosts: railwayAllowedHosts.length ? railwayAllowedHosts : undefined,
   },
   build: {
     rollupOptions: {
