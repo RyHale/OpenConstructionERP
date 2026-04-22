@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-const port = process.env.PORT || '4173';
+const port = process.env.FRONTEND_PORT || '5173';
 const child = spawn(
   'vite',
   ['preview', '--host', '0.0.0.0', '--port', port],
